@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BC Community Population Analysis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    #resetButton { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); }
+    #legend {
+      position: absolute; 
+      font-family: 'Din Pro Regular', sans-serif;
+      top: 150px; 
+      right: 10px; 
+      background: #FAFAFA; 
+      padding: 10px; 
+      border-radius: 5px;
+      width: 200px;
+      height: 50px;
+      border: 1px solid #000000;
+      border-width: 2;
+    }
+    .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+    .legend-item span { width: 20px; height: 20px; margin-right: 5px; }
+    .legend-circle { width: 20px; height: 20px; margin-right: 5px; border-radius: 50%; }
+    .centroids {
+      background-color: #FFFFFF;
+      border: 1px solid #000000; 
+    }
+    .hospitals {
+      background-color: #FF0000;
+      border: 3px solid #000000;
+    }
+
+    .map-overlay {
+        position: absolute;
+        font-family: 'Din Pro Regular', sans-serif;
+        background: #FAFAFA;
+        bottom: 0;
+        right: 10px;
+        padding: 10px;
+        width: 80%;
+        font-size: 16px;
+        color: #000000;
+      border: 1px solid #000000;
+      border-width: 2;
+      border-radius: 5px;
+      }
+      #features {
+        top: 0;
+        height: 100px;
+        margin-top: 15px;
+        width: 410px;
+      }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class='map-overlay' id='features'><h2>Patients Served per Hospital in BC</h2>
+  <div id='pd'><p>Data acquired from Statistics Canada and BC Health</p></div></div>
+  <div class="map-overlay" id="legend"></div>
+<button id="resetButton">Reset Filter</button>
+<div id='legend'>
+  <div class='legend-item'><span class='legend-circle hospitals'></span>Hospitals</div>
+  <div class='legend-item'><span class='legend-circle centroids'></span>Census Tract Centroids</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoibXJvaHJ3YXNzZXIiLCJhIjoiY2x0NHFvbXI2MDV2ZzJqbnBkcXp4Z3lrZiJ9.yfXr9-rc4uRVk2M5IdU0RA';
+
+var map = new mapboxgl.Map({
+  container: 'map',
+  // This style overlays the actual census tract borders of BC at a high zoom level, for visualization purposes
+  style: 'mapbox://styles/mrohrwasser/clv0lx9wi008d01q16py54dhb', 
+  center: [-123.562, 53.920],
+  zoom: 4.6
+});
+
+// Adding layer of census tract centroids, sourced from Statistics Canada
+map.on('load', function () {
+  map.addSource('census-points', {
+    type: 'vector',
+    url: 'mapbox://mrohrwasser.cbt9qc70'
+  });
+  
+  map.addLayer({
+    'id': 'centroids',
+    'type': 'circle',
+    'source': 'census-points',
+    'source-layer': 'new_census-0z6ixq',
+    'paint': {
+      'circle-color': '#FFFFFF',
+      'circle-radius': 3,
+      'circle-stroke-color': '#000000',
+      'circle-stroke-width': 0.5
+    }
+  });
+
+  // Adding hospital point layer, sourced from HealthBC
+  map.addSource('hospital-points', {
+    type: 'vector',
+    url: 'mapbox://mrohrwasser.6lp6x5ou'
+  });
+  
+  map.addLayer({
+    'id': 'hospitals',
+    'type': 'circle',
+    'source': 'hospital-points',
+    'source-layer': 'hlbc_hospitals_shp-8uf7nd',
+    'paint': {
+      'circle-color': '#FF0000',
+      'circle-radius': 8,
+      'circle-stroke-color': '#000000',
+      'circle-stroke-width': 2
+    }
+  });
+
+    // Function that selects and highlights nearest centroids to clicked hospital
+    map.on('click', 'hospitals', function(e) {
+      var highlightedFeature = e.features[0];
+      var matchingProperty = highlightedFeature.properties.SV_NAME;
+
+      var filter = ['==', 'SV_NAME', matchingProperty];
+      map.setFilter('centroids', filter);
+
+      // Function that adds the sum of the population of the highlighted centroids 
+      var sum = map.queryRenderedFeatures({ layers: ['centroids'] })
+  .map(function(feature) {
+    var value = parseFloat(feature.properties.Population);
+    if (isNaN(value)) {
+      console.log("Non-numeric value found:", feature.properties.Population);
+      return 0; // Treats non-numeric values as 0, as to not mess up calculation of total population
+    } else {
+      return value;
+    }
+  })
+  .reduce(function(accumulator, currentValue) {
+    return accumulator + currentValue;
+  }, 0);
+
+        // Creates a pop-up that shows the total population served by the selected hospital
+        new mapboxgl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML('<h3>Population Served by Hospital:</h3><p>' + sum + '</p>')
+        .addTo(map);
+      });
+
+          // Creates a reset button that resets the highlighted centroids when clicked
+    document.getElementById('resetButton').addEventListener('click', function() {
+      map.setFilter('centroids', null);
+    });
+  });
+
+  // Makes hospital layer clickable where applicable
+map.on('mouseenter', 'hospitals', function () {
+  map.getCanvas().style.cursor = 'pointer';
+});
+
+map.on('mouseleave', 'hospitals', function () {
+  map.getCanvas().style.cursor = '';
+});
+
+</script>
+
+</body>
+</html>
