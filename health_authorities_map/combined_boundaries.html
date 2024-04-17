@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 700px;
+        }
+        .legend {
+            background-color: white;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+        .map-title {
+        position: absolute;
+        top: 10px;
+        left: 65px;
+        padding: 10px;
+        background-color: #fafafa;
+        border-radius: 3px;
+        font-size: 20px;
+        font-weight: bold;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        font-family: 'Din Pro Regular', sans-serif;
+        color: #8d8d8d;
+        text-shadow: -0.5px -0.5px 0 #e8e8e8 ,  
+                    0.5px -0.5px 0 #e8e8e8 ,
+                    -0.5px 0.5px 0 #e8e8e8 ,
+                    0.5px 0.5px 0 #e8e8e8 ;
+        z-index: 1000;
+        }
+
+        .map-subtitle {
+            font-size: 14px;
+            font-style: italic;
+            font-family: 'Din Pro Regular', sans-serif;
+            color: #8d8d8d;
+            text-shadow: -0.5px -0.5px 0 #e8e8e8 ,  
+                        0.5px -0.5px 0 #e8e8e8 ,
+                        -0.5px 0.5px 0 #e8e8e8 ,
+                        0.5px 0.5px 0 #e8e8e8 ;}
+        
+    </style>
+</head>
+<body>
+    <!--Title and subtitle for the map-->
+<div class="map-title">
+    <div>BC Health Authority Boundaries</div>
+    <div class="map-subtitle">A Comparison of Provincial Authorities and Metrics of Care</div>
+</div>
+
+<div id="map"></div>
+
+<div id="filter">
+    <label><input type="radio" name="layer" value="population" checked> Population Density</label> 
+    <label><input type="radio" name="layer" value="revenue"> Budget ($)</label>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+<script>
+    //map centered over BC
+    var map = L.map('map').setView([55.9072, -128.0369], 5);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+	attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    }).addTo(map);
+
+    var geojson;
+//commas added to budget amounts
+    function addCommas(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+//colour gradient for each layer
+    function getColorPopulation(d) {
+        return d > 100 ? '#800026' :
+               d > 15.5 ? '#BD0026' :
+               d > 4 ? '#E31A1C' :
+               d > 0.5 ? '#FC4E2A' :
+                        '#FD8D3C';
+    }
+
+    function getColorRevenue(d) {
+        return d > 5500000 ? '#2a4858' :
+               d > 4500000 ? '#17787f' :
+               d > 3000000 ? '#31aa89' :
+               d > 1250000 ? '#89d77b' :
+                        '#fafa6e';
+    }
+//highlighting authority border when mouse over. 
+    function highlightFeature(e) {
+        var layer = e.target;
+
+        layer.setStyle({
+            weight: 3,
+            color: '#666',
+            dashArray: '',
+        });
+
+        layer.bringToFront();
+    }
+
+    function resetHighlight(e) {
+        geojson.resetStyle(e.target);
+    }
+//unable to zoom in unfortunately, yet taking this out breaks the code when ran for some reason. 
+    function zoomToFeature(e) {
+        map.fitBounds(e.target.getBounds());
+    }
+//popup features
+    function table(e) {
+        var layer = e.target;
+        var popupContent;
+        //if statement for when either pop density or budget is selected to change the amount shown in the popup
+        if ($('input[name=layer]:checked').val() === "population") {
+            popupContent = '<b>Name:</b> ' + layer.feature.properties.HLTH_AUTHORITY_NAME + '<br>' +
+                           '<b>Population Density (km²):</b> ' + layer.feature.properties.PopDensitykm;
+        } else {
+            popupContent = '<b>Name:</b> ' + layer.feature.properties.HLTH_AUTHORITY_NAME + '<br>' +
+                           '<b>Budget ($):</b> ' + addCommas(layer.feature.properties.Revenue);
+        }
+        var labelContent = 'feature.properties.HLTH_AUTHORITY_NAME';
+        layer.bindPopup(popupContent, {
+            label: labelContent
+        });
+        layer.openPopup();
+    } 
+//organizing each feature/interaction
+    function onEachFeature(feature, layer) {
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight,
+            click: table
+        });
+    }
+//insertion of data obtained from geojson.
+    $.getJSON('https://adam7742.github.io/healthboundaries/healthboundariesfinal.geojson', function(data) {
+        geojson = L.geoJson(data, {
+            style: function(feature) {
+                if ($('input[name=layer]:checked').val() === "population") {
+                    return {
+                        fillColor: getColorPopulation(feature.properties.PopDensitykm),
+                        weight: 1,
+                        opacity: 1,
+                        color: 'white',
+                        dashArray: '3',
+                        fillOpacity: 0.7
+                    };
+                } else {
+                    return {
+                        fillColor: getColorRevenue(feature.properties.Revenue),
+                        weight: 1,
+                        opacity: 1,
+                        color: 'white',
+                        dashArray: '3',
+                        fillOpacity: 0.7
+                    };
+                }
+            },
+            onEachFeature: onEachFeature
+        }).addTo(map);
+    });
+//legend inserted into map, with colour gradients and labels for each layer
+    var legend = L.control({position: 'bottomleft'});
+
+    legend.onAdd = function (map) {
+        var div = L.DomUtil.create('div', 'info legend');
+        var labels = [];
+//if statement for each layer to change legend
+        if ($('input[name=layer]:checked').val() === "population") {
+            div.innerHTML += '<strong>Population Density</strong><br>';
+            var legendValues = [0.5, 4, 15.5, 100];
+            for (var i = 0; i < legendValues.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getColorPopulation(legendValues[i] + 1) + '"></i> ' +
+                    legendValues[i] + (legendValues[i + 1] ? '&ndash;' + legendValues[i + 1] + '<br>' : '+');
+            }
+        } else {
+            div.innerHTML += '<strong>Budget ($)</strong><br>';
+            var legendValues = [1250000, 3000000, 4500000, 5500000];
+            for (var i = 0; i < legendValues.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getColorRevenue(legendValues[i] + 1) + '"></i> ' +
+                    addCommas(legendValues[i]) + (legendValues[i + 1] ? '&ndash;$' + addCommas(legendValues[i + 1]) + '<br>' : '+');
+            }
+        }
+
+        return div;
+    };
+
+    legend.addTo(map);
+
+    $('input[type=radio][name=layer]').change(function() {
+        map.removeLayer(geojson);
+        $.getJSON('https://adam7742.github.io/healthboundaries/healthboundariesfinal.geojson', function(data) {
+            geojson = L.geoJson(data, {
+                style: function(feature) {
+                    if ($('input[name=layer]:checked').val() === "population") {
+                        return {
+                            fillColor: getColorPopulation(feature.properties.PopDensitykm),
+                            weight: 1,
+                            opacity: 1,
+                            color: 'white',
+                            dashArray: '3',
+                            fillOpacity: 0.7
+                        };
+                    } else {
+                        return {
+                            fillColor: getColorRevenue(feature.properties.Revenue),
+                            weight: 1,
+                            opacity: 1,
+                            color: 'white',
+                            dashArray: '3',
+                            fillOpacity: 0.7
+                        };
+                    }
+                },
+                onEachFeature: onEachFeature
+            }).addTo(map);
+            legend.addTo(map);
+        });
+    });
+</script>
+
+</body>
+</html>
