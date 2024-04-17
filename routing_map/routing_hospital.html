@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BC Healthcare Access Map</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet">
+<script src='https://unpkg.com/@turf/turf/turf.min.js'></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+<style>
+body { margin: 0; padding: 0; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+#filter-container {
+    position: absolute;
+    bottom: 20px;
+    right: 10px;
+    z-index: 1;
+    font-size: 15px;
+    font-family: 'Din Pro Regular', sans-serif;
+    color: #8d8d8d;
+    text-shadow: -0.5px -0.5px 0 #e8e8e8 ,  
+                  0.5px -0.5px 0 #e8e8e8 ,
+                 -0.5px 0.5px 0 #e8e8e8 ,
+                  0.5px 0.5px 0 #e8e8e8 ;
+    background-color: #fafafa;
+    padding: 10px;
+    border-radius: 3px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+#legend {
+    position: absolute;
+    bottom: 35px;
+    left: 10px;
+    z-index: 1000;
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.legend-item {
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
+
+.legend-color.circle {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+.legend-color.special {
+    width: 13px; /* Adjust size as needed */
+    height: 13px; /* Adjust size as needed */
+    border-radius: 50%; /* Makes the box round (circle) */
+    background-color: rgba(0, 0, 0, 0); /* Set transparent background */
+    border: 2px solid black; /* Add 2px black stroke */
+    margin-right: 10px;
+}
+
+.legend-color.line {
+    width: 20px; /* Adjust size as needed */
+    height: 5px; /* Adjust size as needed */
+    margin-right: 6px;
+}
+
+.legend-text {
+    color: #8d8d8d;
+    font-family: 'Din Pro Regular', sans-serif;
+    text-shadow: -0.5px -0.5px 0 #e8e8e8 ,  
+                  0.5px -0.5px 0 #e8e8e8 ,
+                 -0.5px 0.5px 0 #e8e8e8 ,
+                  0.5px 0.5px 0 #e8e8e8 ;
+}
+
+.map-title {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 10px;
+    background-color: #fafafa;
+    border-radius: 3px;
+    font-size: 20px;
+    font-weight: bold;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+    font-family: 'Din Pro Regular', sans-serif;
+    color: #8d8d8d;
+    text-shadow: -0.5px -0.5px 0 #e8e8e8 ,  
+                  0.5px -0.5px 0 #e8e8e8 ,
+                 -0.5px 0.5px 0 #e8e8e8 ,
+                  0.5px 0.5px 0 #e8e8e8 ;
+}
+
+.map-subtitle {
+    font-size: 14px;
+    font-style: italic;
+    font-family: 'Din Pro Regular', sans-serif;
+    color: #8d8d8d;
+    text-shadow: -0.5px -0.5px 0 #e8e8e8 ,  
+                  0.5px -0.5px 0 #e8e8e8 ,
+                 -0.5px 0.5px 0 #e8e8e8 ,
+                  0.5px 0.5px 0 #e8e8e8 ;}
+
+
+.toggleable-layer {
+    position: absolute;
+    bottom: 68px;
+    right: 10px;
+    background-color: #fafafa;
+    padding: 10px;
+    padding-right: 14px;
+    border-radius: 3px;
+    font-size: 14px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+    font-family: 'Din Pro Regular', sans-serif;
+    color: #8d8d8d;
+    text-shadow: -0.5px -0.5px 0 #e8e8e8 ,  
+                  0.5px -0.5px 0 #e8e8e8 ,
+                 -0.5px 0.5px 0 #e8e8e8 ,
+                  0.5px 0.5px 0 #e8e8e8 ;
+}
+</style>
+</head>
+<body>
+
+<!--Divison for the map-->
+<div id="map"></div>
+
+<!--Title and subtitle for the map-->
+<div class="map-title">
+    <div>Hospitals within British Columbia</div>
+    <div class="map-subtitle">An Analysis of Healthcare Accessibility within BC<br>by Route Distance and Healthcare Service</div>
+</div>
+
+<!-- Title and subtitle for the map -->
+<div id="filter-container">
+    <label for="healthcare-service">Healthcare Service:</label>
+    <select id="healthcare-service">
+        <option value="all">All Services</option>
+        <option value="EMERGENCY">Emergency</option>
+        <option value="MATERNITY">Maternity</option>
+        <option value="PEDIATRICS">Pediatrics</option>
+        <option value="ONCOLOGY">Oncology</option>
+    </select>
+    <button id="apply-filter">Apply Filter</button>
+</div>
+
+<!--Legend with varying styling based on symbol-->
+<div id="legend" class="map-overlay">
+    <div class="legend-item">
+        <div class="legend-color circle" style="background-color: rgba(237, 27, 46, 0.8);"></div>
+        <div class="legend-text">BC Hospitals</div>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color circle" style="background-color: rgba(127, 24, 27, 0.8);"></div>
+        <div class="legend-text">Hospitals of Interest</div>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color special" style="background-color: rgba(255, 255, 255, 0.1);"></div>
+        <div class="legend-text">Start and End Points</div>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color line" style="background-color: rgba(0,0,0,0.4);"></div>
+        <div class="legend-text">Route Path</div>
+    </div>
+</div>
+
+<!-- Checkbox to routing feature -->
+<div class="toggleable-layer">
+    <input type="checkbox" id="toggle-feature">
+    <label for="toggle-feature">Toggle Routing</label>
+    <div id="route-info"></div>
+</div>
+  
+<script>
+// Visualizing the basic styling for the map
+mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kcmV3c2h5IiwiYSI6ImNsc2t0endnNzAzaGUybHA1MnNzYTVzYzUifQ.InpgZUzrtVhTws414cM9Ng';
+    const map = new mapboxgl.Map({
+        container: 'map', // container ID
+        style: 'mapbox://styles/andrewshy/clskubkmr00lv01puf0fo1apo', // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+        center: [-123.865, 54.127], // starting position in the middle of BC
+        zoom: 4.5 // starting zoom so you can see the whole province
+    });
+
+let isFiltered = false; // Variable to track if a filter is applied
+
+map.on('load', () => {
+    // Add the vector tileset for hospitals as a source.
+    map.addSource('HOSPITALS', {
+        type: 'vector',
+        url: 'mapbox://andrewshy.bny73p42'
+    });
+
+    // Layer for the hospitals in BC
+    map.addLayer({
+    'id': 'hospitals',
+    'type': 'circle',
+    'source': 'HOSPITALS', // Assuming 'HOSPITALS' is a valid data source
+    'source-layer': 'hlbc_hospitals-cuxbi4', // Verify this corresponds to your actual source layer
+    'paint': {
+        'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            4, 3, // default size for fully zoomed out
+            26, 15 // default size for fully zoomed in
+        ],
+        'circle-color': [
+            'case',
+            isFiltered, // Ensure isFiltered is defined
+            'rgba(127, 24, 27, 0.8)',
+            'rgba(237, 27, 46, 0.8)' // Light red
+        ]
+    }
+});
+});
+
+// Event listener for applying the filter
+document.getElementById('apply-filter').addEventListener('click', function() {
+    var selectedService = document.getElementById('healthcare-service').value; // Get the selected healthcare service from the dropdown menu
+
+    // Define the filter based on the selected service
+    var filter;
+    if (selectedService === 'all') {
+        // Show all hospitals if 'All Services' is selected
+        filter = ['!=', ['get', 'name'], ''];
+    } else {
+        // Filter hospitals where the selected service is available
+        filter = ['==', ['get', selectedService], 'Y'];
+    }
+
+    // Apply the filter
+    map.setFilter('hospitals', filter);
+
+    // Update layer paint properties to reflect changes
+    map.setPaintProperty('hospitals', 'circle-color', [
+        'case',
+        ['==', selectedService, 'all'], // Show all hospitals conditionally
+        'rgba(237, 27, 46, 0.8)', // Light red
+        'rgba(127, 24, 27, 0.8)' // Dark red
+    ]);
+});
+
+// Makes the hospitals clickable
+map.on('click', 'hospitals', function (e) {
+    var feature = e.features[0];
+    var properties = feature.properties;
+    var phone_number_filled = properties.PHONE_NUMB ? properties.PHONE_NUMB : 'Unknown';
+
+    var popup = new mapboxgl.Popup()
+        .setLngLat(feature.geometry.coordinates)
+        .setHTML('<h3>Hospital Information</h3>' +
+            '<p>Hospital Name: ' + properties.SV_NAME + '</p>' +
+            '<p>Address: ' + properties.STREET_NUM + ", " + properties.CITY + ", " + properties.PROVINCE + " " + properties.POSTAL_COD + '</p>' +
+            '<p>Phone Number: ' + phone_number_filled + '</p>' +
+            '<p>Website: <a href="' + properties.WEBSITE + '" target="_blank" style="word-wrap: break-word; max-width: 200px;">' + properties.WEBSITE + '</a></p>' + // Apply CSS styling for website link
+            '<p>Healthcare Region: ' + properties.RG_NAME + '</p>' +
+            '<p>Number of Acute Care Beds: ' + properties.NUM_BED + '</p>' +
+            '<p>Emergency Health Services (Y/N): ' + properties.EMERGENCY + '</p>' +
+            '<p>Maternity Unit (Y/N): ' + properties.MATERNITY + '</p>' +
+            '<p>Pediatrics Unit (Y/N): ' + properties.PEDIATRICS + '</p>' +
+            '<p>Oncology Unit (Y/N): ' + properties.ONCOLOGY + '</p>')
+        .addTo(map);
+});
+
+// Change cursor to pointer when hovering over clickable features
+map.on('mouseenter', 'hospitals', function () {
+    map.getCanvas().style.cursor = 'pointer';
+});
+
+// Change cursor back to default when not hovering over clickable features
+map.on('mouseleave', 'hospitals', function () {
+    map.getCanvas().style.cursor = '';
+});
+
+// Event listener for toggling the feature
+document.getElementById('toggle-feature').addEventListener('change', function() {
+    const isChecked = this.checked; // Check if the checkbox is checked
+
+    if (isChecked) {
+        // If checkbox is checked, enable the feature
+        map.on('click', addStartFeature);
+    } else {
+        // If checkbox is unchecked, disable the feature
+        map.off('click', addStartFeature);
+        removeStartFeature();
+        removeEndFeature(); // Remove the end point when toggling off the feature
+        removeRoute(); // Remove the route when toggling off the feature
+    }
+});
+
+// Function to add start feature
+function addStartFeature(event) {
+    const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]);
+    const start = {
+        type: 'FeatureCollection',
+        features: [
+            {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'Point',
+                    coordinates: coords
+                }
+            }
+        ]
+    };
+
+    if (map.getLayer('start')) {
+        map.getSource('start').setData(start);
+    } else {
+        map.addLayer({
+            id: 'start',
+            type: 'circle',
+            source: {
+                type: 'geojson',
+                data: start
+            },
+            paint: {
+                'circle-radius': 5,
+                'circle-color': 'rgba(255, 255, 255, 0.1)',
+                'circle-stroke-color': 'black',
+                'circle-stroke-width': 2
+            }
+        });
+    }
+}
+
+// Function to remove start feature
+function removeStartFeature() {
+    if (map.getLayer('start')) {
+        map.removeLayer('start');
+        map.removeSource('start');
+    }
+}
+
+// Function to remove end feature
+function removeEndFeature() {
+    if (map.getLayer('point')) {
+        map.removeLayer('point');
+        map.removeSource('point');
+    }
+}
+
+// Function to remove route
+function removeRoute() {
+    if (map.getLayer('route')) {
+        map.removeLayer('route');
+    }
+    if (map.getSource('route')) {
+        map.removeSource('route');
+    }
+}
+
+//making the routing work
+map.on('click', async (event) => {
+    const isChecked = document.getElementById('toggle-feature').checked;
+
+    if (isChecked) {
+        const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]); // same as last code
+        const start = {
+            type: 'FeatureCollection',
+            features: [
+                {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'Point',
+                        coordinates: coords
+                    }
+                }
+            ]
+        };
+
+        // Find the nearest hospital to the clicked point
+        const nearestHospital = await findNearestHospital(coords);
+
+        if (nearestHospital && nearestHospital.hospital) {
+            const endCoords = nearestHospital.hospital.geometry.coordinates;
+            const end = {
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'Point',
+                            coordinates: endCoords
+                        }
+                    }
+                ]
+            };
+
+            // Remove the existing end point layer if it exists
+            removeEndFeature();
+
+            map.addLayer({
+                id: 'point',
+                type: 'circle',
+                source: {
+                    type: 'geojson',
+                    data: end
+                },
+                paint: {
+                    'circle-radius': 5,
+                    'circle-color': 'rgba(255, 255, 255, 0.1)',
+                    'circle-stroke-color': 'black',
+                    'circle-stroke-width': 2
+                }
+            });
+
+            // Call getRoute function with start and end coordinates
+            const shortestRoute = await getRoute(coords, endCoords);
+            displayShortestRoute(shortestRoute);
+        }
+    }
+});
+
+//function to find the nearest hospitals by looking at the 5 closest
+async function findNearestHospital(coords) {
+    // Query only the visible features based on the current map view
+    const visibleHospitals = await map.queryRenderedFeatures({ layers: ['hospitals'] });
+
+    // Get the selected healthcare service from the dropdown menu
+    var selectedService = document.getElementById('healthcare-service').value;
+
+    // Define the hospitals based on whether all services are selected or not
+    let hospitals;
+    if (selectedService === 'all') {
+        hospitals = visibleHospitals;
+    } else {
+        // Filter hospitals where the selected service is available
+        hospitals = visibleHospitals.filter(hospital => hospital.properties[selectedService] === 'Y');
+    }
+
+    // If no hospitals are available for the selected service, return null
+    if (hospitals.length === 0) {
+        return null;
+    }
+
+    // Find the nearest 5 hospitals among the hospitals
+    const nearestHospitals = hospitals
+        .map(hospital => ({
+            hospital,
+            distance: turf.distance(
+                turf.point(coords),
+                turf.point(hospital.geometry.coordinates)
+            )
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 5);
+
+    // Calculate routes to the nearest 5 hospitals
+    const routes = await Promise.all(nearestHospitals.map(async ({ hospital }) => {
+        const route = await getRoute(coords, hospital.geometry.coordinates);
+        const routeDistance = turf.length(route, { units: 'kilometers' });
+        return { hospital, routeDistance, route };
+    }));
+
+    // Find the hospital with the shortest route
+    const shortestRoute = routes.reduce((prev, curr) => {
+        return prev.routeDistance < curr.routeDistance ? prev : curr;
+    });
+
+    return shortestRoute;
+}
+
+//function to get route using the API
+async function getRoute(start, end) {
+    const query = await fetch(
+        `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`,
+        { method: 'GET' }
+    );
+    const json = await query.json();
+    const data = json.routes[0];
+    const route = data.geometry.coordinates;
+    const distance = data.distance; // Distance in meters
+    const duration = data.duration; // Duration in seconds
+    return {
+        type: 'Feature',
+        properties: { distance, duration }, // Include distance and duration in properties
+        geometry: {
+            type: 'LineString',
+            coordinates: route
+        }
+    };
+}
+
+// Event listener for toggling the feature
+document.getElementById('toggle-feature').addEventListener('change', function() {
+    const isChecked = this.checked; // Check if the checkbox is checked
+
+    if (isChecked) {
+        // If checkbox is checked, enable the feature
+        map.on('click', addStartFeature);
+    } else {
+        // If checkbox is unchecked, disable the feature
+        map.off('click', addStartFeature);
+        removeStartFeature();
+        removeEndFeature(); // Remove the end point when toggling off the feature
+        removeRoute(); // Remove the route when toggling off the feature
+        clearRouteInfo(); // Clear route information when toggling off the feature
+    }
+});
+
+// Function to display route information
+function displayRouteInfo(route) {
+    const routeDistanceKm = turf.length(route, { units: 'kilometers' }); // Calculate route distance in kilometers
+    const routeDurationSeconds = route.properties.duration; // Duration of the route in seconds
+    const routeDurationHours = Math.floor(routeDurationSeconds / 3600); // Calculate route duration in hours
+    const routeDurationMinutes = Math.floor((routeDurationSeconds % 3600) / 60); // Calculate remaining minutes
+
+    // Construct route information string
+    const routeInfo = `Route Distance: ${routeDistanceKm.toFixed(2)} km<br>Route Duration: ${routeDurationHours} hours ${routeDurationMinutes} minutes`;
+
+    // Display route information
+    document.getElementById('route-info').innerHTML = routeInfo;
+}
+
+// Function to clear route information
+function clearRouteInfo() {
+    document.getElementById('route-info').innerHTML = '';
+}
+
+// Function to display the shortest route
+function displayShortestRoute(route) {
+    if (map.getSource('shortest-route')) {
+        map.getSource('shortest-route').setData(route);
+        displayRouteInfo(route); // Display route information when route is displayed
+    } else {
+        map.addLayer({
+            id: 'shortest-route',
+            type: 'line',
+            source: {
+                type: 'geojson',
+                data: route
+            },
+            layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            paint: {
+                'line-color': '#000000',
+                'line-width': 5,
+                'line-opacity': 0.4
+            }
+        });
+        displayRouteInfo(route); // Display route information when route is displayed
+    }
+}
+
+</script>
+</body>
+</html>
