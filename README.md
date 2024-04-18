@@ -15,7 +15,7 @@ Here is the [link](https://ubc-geos472-spring2024.github.io/group3_final_project
 ## Community Reliance Visualization
 Here is the [link](https://ubc-geos472-spring2024.github.io/group3_final_project/community_map/Hospital_Population_Analysis.html) to our map, which visualizes the amount of people served by each hospital across BC, based on their proximity to a particular hospital.
 
-![Screenshot example](community_analysis_example_screenshot.JPG)
+![Screenshot example](community_analysis_example_screenshot.jpg)
 
 ## Provincial Health Authorities Visualization
 Here is the [link](https://ubc-geos472-spring2024.github.io/group3_final_project/health_authorities_map/combined_boundaries.html) to our map, which visualizes the operational differences between health authorities across BC.
